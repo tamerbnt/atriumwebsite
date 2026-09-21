@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { RoundedBox } from '@react-three/drei';
+import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { RobotHead, RobotHeadHandle } from './RobotHead';
 import {
   createBakedEnvironmentTexture,
   createBrushedMetalTexture,
@@ -19,12 +20,45 @@ interface Scene3DProps {
   onStatsUpdate?: (stats: { fps: number; drawCalls: number; triangles: number }) => void;
 }
 
-// 4 Aluminum cubes config — spacious, collision-free cluster floating weightlessly above the terracotta space
-const CUBE_CONFIGS = [
-  { id: 1, pos: [-0.54, 0.52, -0.22] as [number, number, number], rotSpeed: [0.28, 0.34, 0.16] as [number, number, number], phase: 0 },
-  { id: 2, pos: [0.54, 0.58, -0.16] as [number, number, number], rotSpeed: [-0.30, 0.28, 0.18] as [number, number, number], phase: 1.8 },
-  { id: 3, pos: [-0.48, -0.25, 0.30] as [number, number, number], rotSpeed: [0.22, -0.28, 0.22] as [number, number, number], phase: 3.4 },
-  { id: 4, pos: [0.48, -0.22, 0.26] as [number, number, number], rotSpeed: [-0.24, -0.30, -0.16] as [number, number, number], phase: 5.1 },
+// 4 Stylized Robot Heads arrangement: stacked loose vertical & diagonal composition
+// Inspired by the AIAF reference screenshot composition
+export const ROBOT_CONFIGS = [
+  {
+    id: 1,
+    name: 'Hero Central',
+    pos: [0.08, 0.28, 0.35] as [number, number, number],
+    rot: [0.08, -0.32, -0.04] as [number, number, number],
+    scale: 1.05,
+    rotSpeedY: 0.18,
+    phase: 0,
+  },
+  {
+    id: 2,
+    name: 'Top Left Accent',
+    pos: [-0.64, 0.78, -0.22] as [number, number, number],
+    rot: [-0.05, 0.38, 0.08] as [number, number, number],
+    scale: 0.88,
+    rotSpeedY: -0.15,
+    phase: 2.1,
+  },
+  {
+    id: 3,
+    name: 'Lower Left Base',
+    pos: [-0.55, -0.28, 0.15] as [number, number, number],
+    rot: [0.12, 0.45, -0.06] as [number, number, number],
+    scale: 0.92,
+    rotSpeedY: 0.16,
+    phase: 3.8,
+  },
+  {
+    id: 4,
+    name: 'Back Right Depth',
+    pos: [0.62, 0.72, -0.35] as [number, number, number],
+    rot: [0.06, -0.55, 0.05] as [number, number, number],
+    scale: 0.82,
+    rotSpeedY: -0.14,
+    phase: 5.4,
+  },
 ];
 
 /**
@@ -40,11 +74,14 @@ function SceneContent({
 }) {
   const { gl, scene, pointer, viewport } = useThree();
 
-  // References to the 4 aluminum cube meshes for continuous floating animation
-  const cube1Ref = useRef<THREE.Mesh>(null);
-  const cube2Ref = useRef<THREE.Mesh>(null);
-  const cube3Ref = useRef<THREE.Mesh>(null);
-  const cube4Ref = useRef<THREE.Mesh>(null);
+  // Head component handle references
+  const head1Ref = useRef<RobotHeadHandle>(null);
+  const head2Ref = useRef<RobotHeadHandle>(null);
+  const head3Ref = useRef<RobotHeadHandle>(null);
+  const head4Ref = useRef<RobotHeadHandle>(null);
+
+  // Master cluster group ref for subtle scroll animation
+  const clusterGroupRef = useRef<THREE.Group>(null);
 
   // FPS tracking
   const frameCountRef = useRef(0);
@@ -64,20 +101,56 @@ function SceneContent({
     scene.background = new THREE.Color('#06070a');
   }, [scene, envTexture]);
 
-  // Brushed aluminum PBR material (Apple-grade anodized aluminum with satin sheen & crisp edge speculars)
-  const aluminumMaterial = useMemo(() => {
+  // Gunmetal / Charcoal Metallic Material with Clearcoat Gloss
+  const bodyMaterial = useMemo(() => {
     return new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#eaedf4'), // Pure high-grade natural anodized aluminum
-      metalness: 0.94, // True metallic conductivity
-      roughness: 0.22, // Fine satin-matte micro-roughness
+      color: new THREE.Color('#22262d'), // Premium gunmetal dark charcoal
+      metalness: 0.95, // True metallic conductivity
+      roughness: 0.20, // Fine satin-matte micro-roughness
       bumpMap: brushedTex,
-      bumpScale: 0.008, // Subtle sub-millimeter anisotropic grain
-      clearcoat: 0.35, // Premium protective gloss layer highlighting bevel edges
-      clearcoatRoughness: 0.12,
-      envMapIntensity: 2.2, // Crisp specular reflection of the softbox and rim strips
+      bumpScale: 0.005, // Subtle brushed grain
+      clearcoat: 1.0, // High-gloss specular highlight on bevel fillets
+      clearcoatRoughness: 0.10,
+      envMapIntensity: 2.2, // Studio reflection sharpness
       reflectivity: 0.95,
     });
   }, [brushedTex]);
+
+  // Lower Jaw Material (slightly darker to articulate the panel seam)
+  const jawMaterial = useMemo(() => {
+    return new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#171a20'), // Darker recessed jaw segment
+      metalness: 0.94,
+      roughness: 0.24,
+      bumpMap: brushedTex,
+      bumpScale: 0.005,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.14,
+      envMapIntensity: 1.8,
+    });
+  }, [brushedTex]);
+
+  // Glowing Terracotta Eye Material (pulsed in RobotHead)
+  const eyeMaterial = useMemo(() => {
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#d96342'), // Brand terracotta / coral
+      emissive: new THREE.Color('#ff6e4a'),
+      emissiveIntensity: 2.2,
+      roughness: 0.12,
+      metalness: 0.1,
+    });
+  }, []);
+
+  // Rivet bolt material
+  const rivetMaterial = useMemo(() => {
+    return new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#121418'),
+      metalness: 0.98,
+      roughness: 0.15,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+    });
+  }, []);
 
   // Small floating terracotta flat space material
   const terracottaFlatSpaceMaterial = useMemo(() => {
@@ -91,10 +164,11 @@ function SceneContent({
 
   // Subtle floating scroll displacement targets
   const scrollAnimRef = useRef({
-    cubeSpread: 0,
+    clusterY: 0,
+    clusterSpread: 0,
   });
 
-  // GSAP ScrollTrigger for gentle floating cube spread on scroll
+  // GSAP ScrollTrigger for gentle floating cluster offset on scroll
   useEffect(() => {
     const scrollTarget = scrollAnimRef.current;
 
@@ -110,22 +184,23 @@ function SceneContent({
     tl.to(
       scrollTarget,
       {
-        cubeSpread: 1.5,
+        clusterY: -0.4,
+        clusterSpread: 0.6,
         ease: 'power1.inOut',
       },
       0
     );
 
     return () => {
-      ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
+      tl.kill();
     };
   }, []);
 
   // Frame animation loop
-  useFrame((state, delta) => {
+  useFrame((state) => {
     const now = performance.now();
 
-    // 1. Interactive subtle mouse parallax (simulates zero-g floating inertia)
+    // 1. Interactive subtle mouse parallax (simulates floating zero-g inertia)
     const targetCamX = pointer.x * (isMobile ? 0.05 : 0.12);
     const targetCamY = (isMobile ? 0.4 : 0.6) + pointer.y * (isMobile ? 0.04 : 0.10);
     state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, targetCamX, 0.05);
@@ -147,88 +222,64 @@ function SceneContent({
       }
     }
 
-    // 3. Weightless flight of the 4 rounded aluminum cubes in space
-    const anim = scrollAnimRef.current;
-    const idleMultiplier = isMobile ? 0.4 : 1.0;
-    const timeFactor = delta * idleMultiplier;
-
-    const cubes = [cube1Ref.current, cube2Ref.current, cube3Ref.current, cube4Ref.current];
-    cubes.forEach((cube, index) => {
-      if (!cube) return;
-      const config = CUBE_CONFIGS[index];
-
-      // Smooth continuous multi-axis tumbling
-      cube.rotation.x += config.rotSpeed[0] * timeFactor;
-      cube.rotation.y += config.rotSpeed[1] * timeFactor;
-      cube.rotation.z += config.rotSpeed[2] * timeFactor;
-
-      // 3D Orbital Flight Levitation (sinusoidal floating in X, Y, and Z)
-      const t = now * 0.0012 + config.phase;
-      const floatY = Math.sin(t) * 0.03;
-      const floatX = Math.cos(t * 0.7) * 0.018;
-      const floatZ = Math.sin(t * 0.5) * 0.018;
-
-      // Gentle parting displacement on scroll
-      const dirX = Math.sign(config.pos[0]);
-      const dirY = Math.sign(config.pos[1]);
-      const dirZ = Math.sign(config.pos[2]);
-
-      cube.position.x = config.pos[0] + floatX + dirX * anim.cubeSpread * 0.20;
-      cube.position.y = config.pos[1] + floatY + dirY * anim.cubeSpread * 0.12;
-      cube.position.z = config.pos[2] + floatZ + dirZ * anim.cubeSpread * 0.16;
-    });
+    // 3. Subtle cluster displacement on scroll
+    if (clusterGroupRef.current) {
+      clusterGroupRef.current.position.y = scrollAnimRef.current.clusterY;
+    }
   });
 
   // Compute responsive layout offsets using viewport in world units
-  // Shifting to the right: desktop offset increased, with dedicated cube cluster offset to the right
+  // Keep the stack nicely framed on the right half of the hero
   const clusterOffsetX = isMobile ? 0 : Math.min(Math.max(viewport.width * 0.22, 1.15), 1.45);
-  const cubeClusterShiftX = isMobile ? 0 : 0.26; // Moves cubes a little to the right relative to the stage
-  const clusterOffsetY = isMobile ? -0.55 : 0.05;
-  // Make the flat surface substantially bigger (from 1.35 to 1.85, mobile from 1.2 to 1.55)
-  const terracottaRadius = isMobile ? Math.min(viewport.width * 0.44, 1.55) : 1.85;
+  const clusterShiftX = isMobile ? 0 : 0.22;
+  const clusterOffsetY = isMobile ? -0.45 : 0.05;
+  const terracottaRadius = isMobile ? Math.min(viewport.width * 0.44, 1.55) : 1.95;
+
+  const headRefs = [head1Ref, head2Ref, head3Ref, head4Ref];
 
   return (
     <>
-      {/* Studio Space Key Lighting */}
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[clusterOffsetX + cubeClusterShiftX + 5, 8, 5]} intensity={2.6} color="#ffffff" />
-      <directionalLight position={[clusterOffsetX + cubeClusterShiftX - 4, 4, 3]} intensity={1.2} color="#e0f2fe" />
-      <directionalLight position={[clusterOffsetX + cubeClusterShiftX, -3, -2]} intensity={0.6} color="#64748b" />
+      {/* Studio Lighting with Environment reflections */}
+      <ambientLight intensity={0.45} />
+      <directionalLight position={[clusterOffsetX + clusterShiftX + 4, 7, 5]} intensity={2.8} color="#ffffff" />
+      <directionalLight position={[clusterOffsetX + clusterShiftX - 4, 3, 3]} intensity={1.4} color="#e0f2fe" />
+      <directionalLight position={[clusterOffsetX + clusterShiftX, -3, -2]} intensity={0.6} color="#64748b" />
 
-      {/* Terracotta Space Glow — focused upward from beneath the floating aluminum cubes */}
-      <pointLight position={[clusterOffsetX, clusterOffsetY - 1.1, 0.2]} intensity={3.8} color="#d96342" distance={10} />
-      <pointLight position={[clusterOffsetX + cubeClusterShiftX * 0.5, clusterOffsetY - 0.7, 0.8]} intensity={2.4} color="#b85438" distance={9} />
+      {/* Terracotta Upward Rim Glow from beneath */}
+      <pointLight position={[clusterOffsetX, clusterOffsetY - 1.2, 0.2]} intensity={4.2} color="#d96342" distance={10} />
+      <pointLight position={[clusterOffsetX + clusterShiftX * 0.5, clusterOffsetY - 0.7, 0.8]} intensity={2.6} color="#b85438" distance={9} />
 
-      {/* Cluster Group containing the floating terracotta flat space & 4 larger rounded cubes */}
+      {/* Optional Preset Environment for extra crisp reflections */}
+      <Environment preset="studio" />
+
+      {/* Cluster Group containing the floating terracotta flat space & Robot Heads */}
       <group position={[clusterOffsetX, clusterOffsetY, 0]}>
-        {/* ENLARGED FLOATING TERRACOTTA GRADIENT FLAT SPACE — Lowered and tilted much flatter (horizontal floor) */}
+        {/* FLOATING TERRACOTTA GRADIENT FLAT STAGE */}
         <mesh
-          position={[0, -1.05, 0.15]}
+          position={[0, -1.15, 0.15]}
           rotation={[-Math.PI * 0.48, 0, 0]}
           material={terracottaFlatSpaceMaterial}
         >
-          {/* Substantially larger circular disc with soft radial gradient, guaranteed never cut off */}
           <circleGeometry args={[terracottaRadius, 64]} />
         </mesh>
 
-        {/* 4 Metallic Brushed Aluminum Cubes with ROUNDED EDGES — shifted a little to the right */}
-        <group position={[cubeClusterShiftX, 0, 0]}>
-          {CUBE_CONFIGS.map((config, index) => {
-            const refMap = [cube1Ref, cube2Ref, cube3Ref, cube4Ref];
-            return (
-              <RoundedBox
-                key={config.id}
-                ref={refMap[index]}
-                args={[0.58, 0.58, 0.58]} // Sized up, spacious and collision-free
-                radius={0.075} // Smoothly rounded bevel fillet
-                smoothness={5} // Silky edge curvature
-                position={config.pos}
-                material={aluminumMaterial}
-                castShadow={false}
-                receiveShadow={false}
-              />
-            );
-          })}
+        {/* 4 STYLIZED ROBOT HEADS */}
+        <group ref={clusterGroupRef} position={[clusterShiftX, 0, 0]}>
+          {ROBOT_CONFIGS.map((config, index) => (
+            <RobotHead
+              key={config.id}
+              ref={headRefs[index]}
+              position={config.pos}
+              rotation={config.rot}
+              scale={config.scale}
+              rotSpeedY={config.rotSpeedY}
+              phase={config.phase}
+              bodyMaterial={bodyMaterial}
+              jawMaterial={jawMaterial}
+              eyeMaterial={eyeMaterial}
+              rivetMaterial={rivetMaterial}
+            />
+          ))}
         </group>
       </group>
     </>
