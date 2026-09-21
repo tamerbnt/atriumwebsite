@@ -1,0 +1,6 @@
+{
+  "name": "Atrium — Business Management Platform",
+  "description": "Desktop and cloud business management platform for gyms, salons, and restaurants in Algeria and MENA. Offline-first, multi-branch clarity, and real-time operations by Stoa Studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
