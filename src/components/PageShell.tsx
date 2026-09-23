@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
   ChevronRight,
   WifiOff,
@@ -16,6 +18,9 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { CONTENT, Language } from '../content/copy';
+import { useLenis } from './SmoothScroll';
+
+gsap.registerPlugin(ScrollTrigger);
 
 interface PageShellProps {
   lang: Language;
@@ -40,15 +45,75 @@ export default function PageShell({
   const [activeVertical, setActiveVertical] = useState('gym');
   const [activeKpiFilter, setActiveKpiFilter] = useState<'all' | 'sales' | 'staff' | 'inventory'>('all');
 
+  const { scrollTo: lenisScrollTo } = useLenis();
+
   const scrollTo = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
+    lenisScrollTo(`#${id}`, { offset: -70 });
   };
 
   const currentVertical =
     content.verticals.items.find((v) => v.id === activeVertical) || content.verticals.items[0];
+
+  // Hero Parallax Refs
+  const heroSectionRef = useRef<HTMLElement>(null);
+  const heroTextRef = useRef<HTMLDivElement>(null);
+  const heroScrollHintRef = useRef<HTMLDivElement>(null);
+  const heroGlowRef = useRef<HTMLDivElement>(null);
+
+  // Parallax Scroll Effect on Hero Section
+  useEffect(() => {
+    if (!heroSectionRef.current || !heroTextRef.current) return;
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: heroSectionRef.current,
+          start: 'top top',
+          end: 'bottom bottom',
+          scrub: 1.0,
+        },
+      });
+
+      // Text block drifts upward and fades gracefully as user scrolls through the 3D scene
+      tl.to(
+        heroTextRef.current,
+        {
+          y: -115,
+          opacity: 0.12,
+          ease: 'power1.out',
+        },
+        0
+      );
+
+      // Scroll hint prompt fades out quickly
+      if (heroScrollHintRef.current) {
+        tl.to(
+          heroScrollHintRef.current,
+          {
+            y: -35,
+            opacity: 0,
+            ease: 'power1.out',
+          },
+          0
+        );
+      }
+
+      // Background atmospheric terracotta ambient glow shifts at a slower rate
+      if (heroGlowRef.current) {
+        tl.to(
+          heroGlowRef.current,
+          {
+            y: 95,
+            scale: 1.15,
+            ease: 'none',
+          },
+          0
+        );
+      }
+    });
+
+    return () => ctx.revert();
+  }, []);
 
   return (
     <div
@@ -174,19 +239,32 @@ export default function PageShell({
       {/* ------------------------------------------------------------- */}
       {/* SECTION 1 — HERO */}
       {/* Job: Stop the scroll, state the promise in one sentence, no jargon */}
+      {/* Extended scroll track for buttery smooth 3D & DOM parallax */}
       {/* ------------------------------------------------------------- */}
       <section
         id="section-hero"
-        className="relative w-full h-[150vh] bg-[#06070a]"
+        ref={heroSectionRef}
+        className="relative w-full h-[175vh] bg-[#06070a]"
       >
         {/* Sticky Background Container for the 3D Hero Scene (Full Viewport) */}
         <div className="sticky top-0 h-screen w-full overflow-hidden z-0 pointer-events-none">
           {hero3DNode}
         </div>
 
+        {/* Ambient atmospheric terracotta glow with parallax translation */}
+        <div
+          ref={heroGlowRef}
+          className="absolute top-1/4 right-[12%] w-[480px] h-[480px] rounded-full bg-[#b85438]/10 blur-[130px] pointer-events-none -z-10"
+          style={{ willChange: 'transform' }}
+        />
+
         {/* Hero Content Overlay Layer */}
         <div className="absolute top-0 left-0 right-0 h-screen z-10 p-6 sm:p-12 pt-32 sm:pt-36 max-w-7xl mx-auto flex flex-col justify-between pointer-events-none">
-          <div className="max-w-xl pointer-events-auto">
+          <div
+            ref={heroTextRef}
+            className="max-w-xl pointer-events-auto"
+            style={{ willChange: 'transform, opacity' }}
+          >
             {/* Brand Eyebrow Tag */}
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-sm bg-stone-900/90 border border-stone-800 text-stone-300 text-[10px] sm:text-[11px] font-mono mb-4 backdrop-blur-md">
               <span className="w-1.5 h-1.5 rounded-full bg-[#b85438] animate-pulse" />
@@ -221,13 +299,21 @@ export default function PageShell({
           </div>
 
           {/* Scroll Indicator Prompt */}
-          <div className="pt-12 pb-4 flex items-center justify-between border-t border-stone-800/60 pointer-events-auto">
-            <div className="flex items-center gap-2 text-[11px] font-mono text-stone-400">
-              <ArrowDownRight className="w-3.5 h-3.5 text-[#b85438]" />
+          <div
+            ref={heroScrollHintRef}
+            className="pt-12 pb-4 flex items-center justify-between border-t border-stone-800/60 pointer-events-auto"
+            style={{ willChange: 'transform, opacity' }}
+          >
+            <button
+              type="button"
+              onClick={() => scrollTo('section-problem')}
+              className="flex items-center gap-2 text-[11px] font-mono text-stone-400 hover:text-stone-200 transition cursor-pointer group"
+            >
+              <ArrowDownRight className="w-3.5 h-3.5 text-[#b85438] group-hover:translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />
               <span>{content.hero.scrollHint}</span>
-            </div>
+            </button>
             <div className="text-[10px] font-mono text-stone-500 hidden sm:block">
-              3D METALLIC &amp; TERRACOTTA ENGINE ACTIVE
+              3D METALLIC &amp; TERRACOTTA PARALLAX ACTIVE
             </div>
           </div>
         </div>

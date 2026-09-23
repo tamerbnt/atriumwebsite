@@ -32,23 +32,20 @@ export function detectDeviceCapabilities(): DeviceProfile {
     /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent) ||
     (window.innerWidth < 768 && 'ontouchstart' in window);
 
-  // 3. WebGL Support check
-  let hasWebGL = false;
+  // 3. WebGL Support check (support WebGL2 and WebGL)
+  let hasWebGL = true;
   try {
     const canvas = document.createElement('canvas');
-    hasWebGL = !!(
-      window.WebGLRenderingContext &&
-      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
-    );
+    const gl =
+      canvas.getContext('webgl2') ||
+      canvas.getContext('webgl') ||
+      canvas.getContext('experimental-webgl');
+    hasWebGL = !!gl;
   } catch {
-    hasWebGL = false;
+    hasWebGL = true; // Optimistically assume WebGL supported in modern browsers
   }
 
   // 4. Low-end hardware detection
-  const hardwareConcurrency = navigator.hardwareConcurrency || 4;
-  // @ts-expect-error deviceMemory is available on Chrome/Edge
-  const deviceMemory = navigator.deviceMemory || 8;
-
   let isLowEnd = false;
   let reason = 'Optimal hardware configuration';
 
@@ -56,13 +53,11 @@ export function detectDeviceCapabilities(): DeviceProfile {
     isLowEnd = true;
     reason = 'No WebGL hardware acceleration found';
   } else if (prefersReducedMotion) {
-    isLowEnd = true;
     reason = 'User prefers reduced motion';
   }
 
-  // The 3D scene is strictly optimized with ~116 low-poly triangles and 0 shadow passes,
-  // running at 60 FPS even on low-end hardware. Always enable 3D if WebGL is supported.
-  const recommendedMode = !hasWebGL ? 'fallback' : '3d';
+  // Default to 3D mode for all visitors; fallback is only used if WebGL is completely unavailable
+  const recommendedMode = hasWebGL ? '3d' : 'fallback';
 
   return {
     isLowEnd,

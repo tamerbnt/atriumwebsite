@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, Calendar, Sparkles, Building2, Phone, User } from 'lucide-react';
 import { Language } from '../content/copy';
+import { useLenis } from './SmoothScroll';
 
 interface DemoModalProps {
   isOpen: boolean;
@@ -9,12 +10,24 @@ interface DemoModalProps {
 }
 
 export default function DemoModal({ isOpen, onClose, lang }: DemoModalProps) {
+  const { stop, start } = useLenis();
   const [businessType, setBusinessType] = useState('gym');
   const [businessName, setBusinessName] = useState('');
   const [city, setCity] = useState('Algiers');
   const [phone, setPhone] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      stop();
+    } else {
+      start();
+    }
+    return () => {
+      start();
+    };
+  }, [isOpen, stop, start]);
 
   if (!isOpen) return null;
 

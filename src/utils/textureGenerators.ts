@@ -303,3 +303,55 @@ export function createSpaceTerracottaGradientTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+/**
+ * Generates an optical eye lens texture with a radial gradient emissive falloff.
+ * Features an intense hot terracotta/coral core fading into darker saturated edges.
+ */
+export function createEyeGlowTexture(): THREE.CanvasTexture {
+  const width = 256;
+  const height = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  // Smooth dark base
+  ctx.fillStyle = '#140402';
+  ctx.fillRect(0, 0, width, height);
+
+  // Elliptical radial gradient for rectangular rounded lens
+  ctx.save();
+  ctx.scale(1.0, 0.5);
+
+  const grad = ctx.createRadialGradient(
+    width * 0.5,
+    height,
+    4,
+    width * 0.5,
+    height,
+    width * 0.48
+  );
+
+  // Hot core to dimmer rim falloff
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(0.20, '#ff8a65');
+  grad.addColorStop(0.55, '#ff5024');
+  grad.addColorStop(0.85, '#9e2a10');
+  grad.addColorStop(1.0, '#1a0502');
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(width * 0.5, height, width * 0.48, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
